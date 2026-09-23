@@ -8,7 +8,7 @@ const projectSchema = new mongoose.Schema({
 
 const portfolioSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    bio: { type: String, required: true },
+    bio: { type: String, required: true, maxlength: [20, 'Bio cannot exceed 20 characters'] },
     skills: { type: [String], default: [] },
     projects: { type: [projectSchema], default: [] },
     experience: { type: String },

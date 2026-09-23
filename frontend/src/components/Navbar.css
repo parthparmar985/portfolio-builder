@@ -1,14 +1,14 @@
 /* Navbar Styles */
 .glass-nav {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.75); /* Light premium glass */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(229, 231, 235, 0.5);
   position: sticky;
   top: 0;
   z-index: 1000;
   padding: 1rem 0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05); /* Softer shadow */
   transition: all 0.3s ease;
 }
 

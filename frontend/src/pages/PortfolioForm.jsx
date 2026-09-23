@@ -77,7 +77,7 @@ const PortfolioForm = () => {
             navigate('/dashboard');
         } catch (error) {
             console.error("Error saving portfolio", error);
-            alert("Failed to save portfolio.");
+            alert(error.response?.data?.message || "Failed to save portfolio.");
         }
     };
 
