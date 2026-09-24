@@ -5,6 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 const Register = () => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    const [age, setAge] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState(null);
     const { register, user } = useContext(AuthContext);
@@ -19,7 +20,7 @@ const Register = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await register(name, email, password);
+            await register(name, email, age, password);
         } catch (err) {
             setError(err.response?.data?.message || 'Registration failed');
         }
@@ -38,6 +39,10 @@ const Register = () => {
                     <div className="form-group">
                         <label>Email Address</label>
                         <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                    </div>
+                    <div className="form-group">
+                        <label>Age</label>
+                        <input type="number" value={age} onChange={e => setAge(e.target.value)} required />
                     </div>
                     <div className="form-group">
                         <label>Password</label>
