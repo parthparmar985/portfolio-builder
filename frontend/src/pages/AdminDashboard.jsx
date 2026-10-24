@@ -91,6 +91,29 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
+
+
+<div
+    className="stats-card"
+    style={{
+        background: '#d97706',
+        color: 'white',
+        borderColor: '#d97706',
+        padding: '1.5rem',
+        borderRadius: '12px',
+        maxWidth: '300px'
+    }}
+>
+    <h3 style={{ color: 'white', fontSize: '2rem', margin: '0 0 10px' }}>
+        {stats.recordsAddedToday ?? 0}
+    </h3>
+
+    <p style={{ margin: 0, opacity: 0.9 }}>
+        Records Added Today
+    </p>
+</div>
+
+
             <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
                 <h2 style={{ padding: '1.5rem', margin: 0, borderBottom: '1px solid var(--border-color)' }}>Manage Users</h2>
                 <div style={{ overflowX: 'auto' }}>

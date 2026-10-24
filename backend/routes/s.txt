@@ -1,0 +1,11 @@
+a. create  a dhasboard component with cards for total records , active records , and record added today.
+
+b. create GET /api/<entity>/stats using countDocuments or and
+aggregation pipeline.
+
+c. fetch the stats with useEffect and display theme with loading anbd error states.
+
+d. test the stats API in thunderclient with and without a token
+http://localhost:5000/api/records/stats 
+
+e. demo your latets git commit and push.

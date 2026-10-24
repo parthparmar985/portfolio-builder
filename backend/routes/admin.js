@@ -1,134 +1,290 @@
+```javascript
 const express = require('express');
 const router = express.Router();
+
 const User = require('../models/User');
 const Portfolio = require('../models/Portfolio');
+
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-// Admin Auth Middleware
+// ========================================
+// ADMIN AUTHENTICATION MIDDLEWARE
+// ========================================
 const protectAdmin = async (req, res, next) => {
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
+    try {
+        let token;
+
+        if (
+            req.headers.authorization &&
+            req.headers.authorization.startsWith('Bearer ')
+        ) {
             token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretkey');
-            req.user = decoded;
-            if (req.user.role === 'admin') {
-                next();
-            } else {
-                res.status(403).json({ message: 'Not authorized as admin' });
-            }
-        } catch (error) {
-            res.status(401).json({ message: 'Not authorized, token failed' });
         }
-    } else {
-        res.status(401).json({ message: 'Not authorized, no token' });
+
+        if (!token) {
+            return res.status(401).json({
+                message: 'Not authorized, token missing'
+            });
+        }
+
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET || 'your_jwt_secret'
+        );
+
+        const user = await User.findById(decoded.id);
+
+        if (!user || user.role !== 'admin') {
+            return res.status(403).json({
+                message: 'Admin access required'
+            });
+        }
+
+        req.user = user;
+        next();
+
+    } catch (error) {
+        return res.status(401).json({
+            message: 'Invalid or expired token'
+        });
     }
 };
 
-// Get stats
+
+// ========================================
+// GET ADMIN DASHBOARD STATS
+// GET /api/admin/stats
+// ========================================
 router.get('/stats', protectAdmin, async (req, res) => {
     try {
-        const usersCount = await User.countDocuments();
-        const portfoliosCount = await Portfolio.countDocuments();
-        res.json({ totalUsers: usersCount, totalPortfolios: portfoliosCount });
+        // Total registered users
+        const totalUsers = await User.countDocuments();
+
+        // Total portfolios
+        const totalPortfolios = await Portfolio.countDocuments();
+
+        // Start of today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Start of tomorrow
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Users created today
+        const recordsAddedToday = await User.countDocuments({
+            createdAt: {
+                $gte: today,
+                $lt: tomorrow
+            }
+        });
+
+        res.status(200).json({
+            totalUsers,
+            totalPortfolios,
+            recordsAddedToday
+        });
+
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Dashboard stats error:', error);
+
+        res.status(500).json({
+            message: 'Failed to fetch dashboard statistics'
+        });
     }
 });
 
-// Change admin password
+
+// ========================================
+// CHANGE ADMIN PASSWORD
+// PUT /api/admin/change-password
+// ========================================
 router.put('/change-password', protectAdmin, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
-        const user = await User.findById(req.user.id);
-        if (user && (await user.matchPassword(currentPassword))) {
-            user.password = newPassword;
-            await user.save();
-            res.json({ message: 'Password updated successfully' });
-        } else {
-            res.status(401).json({ message: 'Invalid current password' });
-        }
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
 
-// Get all users
-router.get('/users', protectAdmin, async (req, res) => {
-    try {
-        if (req.query.page && req.query.limit) {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const skip = (page - 1) * limit;
-
-            const total = await User.countDocuments();
-            const users = await User.find().select('-password').skip(skip).limit(limit);
-            
-            return res.json({
-                users,
-                totalPages: Math.ceil(total / limit),
-                currentPage: page
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                message: 'Please provide current and new passwords'
             });
         }
-        
-        // Fallback for non-paginated requests if frontend isn't passing parameters
-        const users = await User.find().select('-password');
-        res.json(users);
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                message: 'New password must be at least 6 characters'
+            });
+        }
+
+        const admin = await User.findById(req.user._id);
+
+        const isMatch = await admin.matchPassword(currentPassword);
+
+        if (!isMatch) {
+            return res.status(400).json({
+                message: 'Current password is incorrect'
+            });
+        }
+
+        admin.password = newPassword;
+        await admin.save();
+
+        res.status(200).json({
+            message: 'Password changed successfully'
+        });
+
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Change password error:', error);
+
+        res.status(500).json({
+            message: 'Failed to change password'
+        });
     }
 });
 
-// Delete user and associated portfolio
+
+// ========================================
+// GET ALL USERS WITH PAGINATION
+// GET /api/admin/users?page=1&limit=5
+// ========================================
+router.get('/users', protectAdmin, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, parseInt(req.query.limit, 10) || 5);
+
+        const skip = (page - 1) * limit;
+
+        const totalUsers = await User.countDocuments({
+            role: { $ne: 'admin' }
+        });
+
+        const users = await User.find({
+            role: { $ne: 'admin' }
+        })
+            .select('-password')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({
+            users,
+            currentPage: page,
+            totalPages: Math.ceil(totalUsers / limit),
+            totalUsers
+        });
+
+    } catch (error) {
+        console.error('Fetch users error:', error);
+
+        res.status(500).json({
+            message: 'Failed to fetch users'
+        });
+    }
+});
+
+
+// ========================================
+// DELETE USER AND THEIR PORTFOLIO
+// DELETE /api/admin/users/:id
+// ========================================
 router.delete('/users/:id', protectAdmin, async (req, res) => {
     try {
         const user = await User.findById(req.params.id);
-        if (user && user.role !== 'admin') {
-            await User.findByIdAndDelete(req.params.id);
-            await Portfolio.findOneAndDelete({ user: req.params.id });
-            res.json({ message: 'User deleted' });
-        } else {
-            res.status(400).json({ message: 'Cannot delete admin or user not found' });
-        }
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
 
-// Get user portfolio (Admin)
-router.get('/portfolio/:userId', protectAdmin, async (req, res) => {
-    try {
-        const portfolio = await Portfolio.findOne({ user: req.params.userId });
-        if (!portfolio) return res.status(200).json(null); // return null if no portfolio yet
-        res.json(portfolio);
-    } catch (error) {
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Update or Create user portfolio (Admin)
-router.put('/portfolio/:userId', protectAdmin, async (req, res) => {
-    try {
-        const { bio, skills, projects, experience, socialLinks } = req.body;
-        let portfolio = await Portfolio.findOne({ user: req.params.userId });
-        
-        if (portfolio) {
-            portfolio.bio = bio;
-            portfolio.skills = skills;
-            portfolio.projects = projects;
-            portfolio.experience = experience;
-            portfolio.socialLinks = socialLinks;
-            await portfolio.save();
-        } else {
-            portfolio = await Portfolio.create({
-                user: req.params.userId, bio, skills, projects, experience, socialLinks
+        if (!user) {
+            return res.status(404).json({
+                message: 'User not found'
             });
         }
-        res.json(portfolio);
+
+        if (user.role === 'admin') {
+            return res.status(400).json({
+                message: 'Admin account cannot be deleted here'
+            });
+        }
+
+        await Portfolio.deleteMany({
+            user: user._id
+        });
+
+        await user.deleteOne();
+
+        res.status(200).json({
+            message: 'User and associated portfolio deleted successfully'
+        });
+
     } catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Delete user error:', error);
+
+        res.status(500).json({
+            message: 'Failed to delete user'
+        });
+    }
+});
+
+
+// ========================================
+// GET A USER'S PORTFOLIO
+// GET /api/admin/portfolio/:userId
+// ========================================
+router.get('/portfolio/:userId', protectAdmin, async (req, res) => {
+    try {
+        const portfolio = await Portfolio.findOne({
+            user: req.params.userId
+        });
+
+        if (!portfolio) {
+            return res.status(404).json({
+                message: 'Portfolio not found'
+            });
+        }
+
+        res.status(200).json(portfolio);
+
+    } catch (error) {
+        console.error('Fetch portfolio error:', error);
+
+        res.status(500).json({
+            message: 'Failed to fetch portfolio'
+        });
+    }
+});
+
+
+// ========================================
+// UPDATE A USER'S PORTFOLIO
+// PUT /api/admin/portfolio/:userId
+// ========================================
+router.put('/portfolio/:userId', protectAdmin, async (req, res) => {
+    try {
+        const portfolio = await Portfolio.findOneAndUpdate(
+            { user: req.params.userId },
+            req.body,
+            {
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!portfolio) {
+            return res.status(404).json({
+                message: 'Portfolio not found'
+            });
+        }
+
+        res.status(200).json({
+            message: 'Portfolio updated successfully',
+            portfolio
+        });
+
+    } catch (error) {
+        console.error('Update portfolio error:', error);
+
+        res.status(500).json({
+            message: 'Failed to update portfolio'
+        });
     }
 });
 
 module.exports = router;
+```
